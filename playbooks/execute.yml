@@ -1,0 +1,31 @@
+---
+- name: Execute Network Change
+  hosts: all
+  connection: ansible.netcommon.network_cli
+  gather_facts: false
+
+  tasks:
+    - name: Capture BEFORE state
+      cisco.ios.ios_command:
+        commands: "show run vlan {{ vlan_id }}"
+      register: before_state
+
+    - name: Apply VLAN Change
+      cisco.ios.ios_vlans:
+        config:
+          - name: "VLAN_{{ vlan_id }}"
+            vlan_id: "{{ vlan_id }}"
+            state: active
+      register: execution_result
+
+    - name: Capture AFTER state
+      cisco.ios.ios_command:
+        commands: "show run vlan {{ vlan_id }}"
+      register: after_state
+
+    - name: Generate Demo Report
+      set_stats:
+        data:
+          change_report:
+            before: "{{ before_state.stdout[0] }}"
+            after: "{{ after_state.stdout[0] }}"
