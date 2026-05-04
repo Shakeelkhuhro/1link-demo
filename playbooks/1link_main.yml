@@ -1,0 +1,62 @@
+---
+- name: 1Link Network Automation - All-in-One Logic
+  hosts: all
+  gather_facts: no
+  collections:
+    - cisco.ios
+
+  tasks:
+    ###############################################################
+    # SECTION 1: VALIDATION (Tag: validate)
+    ###############################################################
+    - name: "VALIDATION: Check if Change is Safe"
+      block:
+        - name: Fetch Current State
+          cisco.ios.ios_command:
+            commands: "show vlan id {{ vlan_id | default(1) }}"
+          register: vlan_check
+          ignore_errors: yes
+
+        - name: Fail if VLAN exists (Safety Check)
+          ansible.builtin.fail:
+            msg: "REJECT: VLAN {{ vlan_id }} already exists."
+          when: 
+            - change_type == "create_vlan"
+            - "'active' in vlan_check.stdout[0]"
+      tags: [validate]
+
+    ###############################################################
+    # SECTION 2: EXECUTION (Tag: execute)
+    ###############################################################
+    - name: "EXECUTION: Apply Network Changes"
+      block:
+        - name: Capture BEFORE State
+          cisco.ios.ios_command:
+            commands: "show ip interface brief"
+          register: before_state
+
+        - name: Apply Configuration
+          cisco.ios.ios_config:
+            lines:
+              - "{{ 'vlan ' + vlan_id | string if change_type == 'create_vlan' else '' }}"
+              - "{{ 'no vlan ' + vlan_id | string if change_type == 'delete_vlan' else '' }}"
+              - "{{ 'interface ' + interface_name if change_type == 'port_status' else '' }}"
+              - "{{ 'shutdown' if change_type == 'port_status' and interface_state == 'disabled' else 'no shutdown' if change_type == 'port_status' else '' }}"
+          register: config_result
+
+        - name: "1Link REPORT"
+          ansible.builtin.debug:
+            msg: "Applied: {{ config_result.updates }} | Status: SUCCESS"
+      tags: [execute]
+
+    ###############################################################
+    # SECTION 3: ROLLBACK (Tag: rollback)
+    ###############################################################
+    - name: "ROLLBACK: Revert to Baseline"
+      block:
+        - name: Undo Changes
+          cisco.ios.ios_config:
+            lines:
+              - "{{ 'no vlan ' + vlan_id | string if change_type == 'create_vlan' else '' }}"
+              - "{{ 'vlan ' + vlan_id | string if change_type == 'delete_vlan' else '' }}"
+      tags: [rollback]
