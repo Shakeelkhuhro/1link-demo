@@ -1,0 +1,23 @@
+---
+- name: Pre-Validation for Network Change
+  hosts: all
+  connection: ansible.netcommon.network_cli
+  gather_facts: false
+
+  tasks:
+    - name: Check if VLAN already exists
+      cisco.ios.ios_command:
+        commands: "show vlan id {{ vlan_id }}"
+      register: vlan_check
+      ignore_errors: true
+
+    - name: Fail if VLAN exists (for Create Change)
+      fail:
+        msg: "❌ Validation Failed: VLAN {{ vlan_id }} already exists on {{ inventory_hostname }}."
+      when: 
+        - change_type == 'create_vlan'
+        - "'active' in vlan_check.stdout[0]"
+
+    - name: Success Message
+      debug:
+        msg: "✅ Validation Passed: Change can be performed."
