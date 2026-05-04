@@ -1,23 +1,44 @@
 ---
-- name: Pre-Validation for Network Change
-  hosts: all
-  connection: ansible.netcommon.network_cli
-  gather_facts: false
+- name: 1Link Pre-Validation Job
+  hosts: c9k
+  gather_facts: no
 
   tasks:
+    # --- VALIDATE VLAN CREATION ---
     - name: Check if VLAN already exists
       cisco.ios.ios_command:
         commands: "show vlan id {{ vlan_id }}"
       register: vlan_check
-      ignore_errors: true
+      ignore_errors: yes
+      when: change_type == 'create_vlan'
 
-    - name: Fail if VLAN exists (for Create Change)
+    - name: Fail if VLAN exists
       fail:
-        msg: "❌ Validation Failed: VLAN {{ vlan_id }} already exists on {{ inventory_hostname }}."
+        msg: "Validation Failed: VLAN {{ vlan_id }} already exists on the device."
       when: 
         - change_type == 'create_vlan'
         - "'active' in vlan_check.stdout[0]"
 
-    - name: Success Message
+    # --- VALIDATE VLAN DELETION ---
+    - name: Fail if VLAN does not exist for deletion
+      fail:
+        msg: "Validation Failed: Cannot delete VLAN {{ vlan_id }} because it does not exist."
+      when: 
+        - change_type == 'delete_vlan'
+        - "'not found' in vlan_check.stdout[0]"
+
+    # --- VALIDATE INTERFACE STATE ---
+    - name: Check interface status
+      cisco.ios.ios_command:
+        commands: "show run interface {{ interface_name }}"
+      register: int_check
+      when: change_type == 'port_status'
+
+    - name: Warn if interface is already in desired state
       debug:
-        msg: "✅ Validation Passed: Change can be performed."
+        msg: "Warning: Interface {{ interface_name }} may already be in the target state."
+      when: change_type == 'port_status'
+
+    - name: Validation Success Message
+      debug:
+        msg: "Change can be performed. Proceeding to Admin Approval."
