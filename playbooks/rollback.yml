@@ -1,0 +1,17 @@
+---
+- name: Rollback Network Change
+  hosts: all
+  connection: ansible.netcommon.network_cli
+  gather_facts: false
+
+  tasks:
+    - name: Revert VLAN Change (Delete VLAN)
+      cisco.ios.ios_vlans:
+        config:
+          - vlan_id: "{{ vlan_id }}"
+            state: deleted
+      register: rollback_result
+
+    - name: Log Rollback Action
+      debug:
+        msg: "⚠️ Rollback initiated: VLAN {{ vlan_id }} has been removed from {{ inventory_hostname }}."
