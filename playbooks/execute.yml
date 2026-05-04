@@ -1,31 +1,37 @@
 ---
-- name: Execute Network Change
-  hosts: all
-  connection: ansible.netcommon.network_cli
-  gather_facts: false
+- name: 1Link Execution Job
+  hosts: c9k
+  gather_facts: no
 
   tasks:
     - name: Capture BEFORE state
       cisco.ios.ios_command:
-        commands: "show run vlan {{ vlan_id }}"
+        commands: 
+          - "show vlan brief"
+          - "show ip interface brief"
       register: before_state
 
-    - name: Apply VLAN Change
-      cisco.ios.ios_vlans:
-        config:
-          - name: "VLAN_{{ vlan_id }}"
-            vlan_id: "{{ vlan_id }}"
-            state: active
-      register: execution_result
+    # --- EXECUTION LOGIC ---
+    - name: Apply Layer 2 / Layer 3 / Interface Changes
+      cisco.ios.ios_config:
+        lines:
+          - "{{ 'vlan ' + vlan_id | string if change_type == 'create_vlan' else '' }}"
+          - "{{ 'no vlan ' + vlan_id | string if change_type == 'delete_vlan' else '' }}"
+          - "{{ 'interface ' + interface_name if change_type == 'port_status' else '' }}"
+          - "{{ 'shutdown' if change_type == 'port_status' and interface_state == 'disabled' else 'no shutdown' if change_type == 'port_status' else '' }}"
+          - "{{ 'interface Vlan' + vlan_id | string if change_type == 'create_svi' else '' }}"
+          - "{{ 'ip address ' + ip_address + ' ' + subnet_mask if change_type == 'create_svi' else '' }}"
 
     - name: Capture AFTER state
       cisco.ios.ios_command:
-        commands: "show run vlan {{ vlan_id }}"
+        commands: 
+          - "show vlan brief"
+          - "show ip interface brief"
       register: after_state
 
     - name: Generate Demo Report
-      set_stats:
-        data:
-          change_report:
-            before: "{{ before_state.stdout[0] }}"
-            after: "{{ after_state.stdout[0] }}"
+      debug:
+        msg: 
+          - "--- 1Link CHANGE REPORT ---"
+          - "BEFORE: {{ before_state.stdout_lines }}"
+          - "AFTER: {{ after_state.stdout_lines }}"
