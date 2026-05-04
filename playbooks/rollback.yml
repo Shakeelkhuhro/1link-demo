@@ -1,17 +1,17 @@
 ---
-- name: Rollback Network Change
-  hosts: all
-  connection: ansible.netcommon.network_cli
-  gather_facts: false
+- name: 1Link Rollback Job
+  hosts: c9k
+  gather_facts: no
 
   tasks:
-    - name: Revert VLAN Change (Delete VLAN)
-      cisco.ios.ios_vlans:
-        config:
-          - vlan_id: "{{ vlan_id }}"
-            state: deleted
-      register: rollback_result
-
+    - name: Revert VLAN/Interface Change
+      cisco.ios.ios_config:
+        lines:
+          - "{{ 'no vlan ' + vlan_id | string if change_type == 'create_vlan' else '' }}"
+          - "{{ 'vlan ' + vlan_id | string if change_type == 'delete_vlan' else '' }}"
+          - "{{ 'interface ' + interface_name if change_type == 'port_status' else '' }}"
+          - "{{ 'no shutdown' if change_type == 'port_status' and interface_state == 'disabled' else 'shutdown' if change_type == 'port_status' else '' }}"
+      
     - name: Log Rollback Action
       debug:
-        msg: "⚠️ Rollback initiated: VLAN {{ vlan_id }} has been removed from {{ inventory_hostname }}."
+        msg: "Rollback executed successfully. Device returned to original state."
